@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>リアルタイム家計簿 - 資産推移版</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; background: #f0f2f5; color: #333; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .balance-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; }
+    #totalBalance { font-size: 32px; margin: 10px 0; font-weight: bold; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    input, select, button { padding: 12px; font-size: 16px; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin-top: 5px; }
+    button { background: #4a90e2; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+    button:hover { background: #357abd; }
+    ul { list-style: none; padding: 0; max-height: 500px; overflow-y: auto; }
+    li { background: #fff; margin-bottom: 8px; padding: 12px; border-radius: 8px; border-left: 6px solid #ccc; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .expense-item { border-left-color: #ff6b6b; }
+    .income-item { border-left-color: #51cf66; }
+    .amount-text { font-weight: bold; font-size: 18px; }
+    .income-text { color: #2b8a3e; }
+    .expense-text { color: #c92a2a; }
+  </style>
+</head>
+<body>
+
+  <div class="card balance-card">
+    <div>現在の総資産（残高）</div>
+    <div id="totalBalance">¥0</div>
+  </div>
+
+  <div class="card">
+    <h3>📈 生涯資産の推移</h3>
+    <canvas id="lineChart" height="120"></canvas>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>手動入力</h3>
+      <select id="typeInput">
+        <option value="expense">支出 (-)</option>
+        <option value="income">収入 (+)</option>
+      </select>
+      <input type="date" id="dateInput">
+      <input type="text" id="storeInput" placeholder="項目（給与、ランチなど）">
+      <input type="number" id="amountInput" placeholder="金額（円）">
+      <button id="addButton">データを追加</button>
+    </div>
+
+    <div class="card">
+      <h3>最近の履歴</h3>
+      <ul id="expenseList">
+        <li>読み込み中...</li>
+      </ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } 
+      from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    // ★ ここをご自身の Firebase Config に書き換えてください ★
+    const firebaseConfig = {
+  apiKey: "AIzaSyBOZjLUkFPhjP9E7wE-7ALSejXDzPDAU3A",
+  authDomain: "my-kakeibo-ee97f.firebaseapp.com",
+  projectId: "my-kakeibo-ee97f",
+  storageBucket: "my-kakeibo-ee97f.firebasestorage.app",
+  messagingSenderId: "150517123786",
+  appId: "1:150517123786:web:b3a478049fe864dacd4233"
+};
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    let lineChartInstance = null;
+
+    // データのリアルタイム取得
+    // ※資産推移を正しく計算するため、日付の「昇順（古い順）」で取得します
+    const q = query(collection(db, "expenses"), orderBy("date", "asc"));
+
+    onSnapshot(q, (snapshot) => {
+      const listElement = document.getElementById("expenseList");
+      const balanceElement = document.getElementById("totalBalance");
+      listElement.innerHTML = "";
+      
+      let runningTotal = 0; // 累積和
+      let chartLabels = [];
+      let chartData = [];
+      let historyItems = []; // 表示用（新しい順にしたいので別途保存）
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const amount = Number(data.amount);
+        const isIncome = data.type === 'income';
+
+        // 累積和を計算
+        if (isIncome) {
+          runningTotal += amount;
+        } else {
+          runningTotal -= amount;
+        }
+
+        // グラフ用データの準備（日付ごとに累積値を保存）
+        chartLabels.push(data.date.substring(5, 10)); // "05/12"形式
+        chartData.push(runningTotal);
+
+        // 履歴用アイテムの作成
+        const li = document.createElement("li");
+        li.className = isIncome ? 'income-item' : 'expense-item';
+        li.innerHTML = `
+          <div>
+            <small style="color:#888">${data.date}</small><br>
+            <strong>${data.store}</strong>
+          </div>
+          <div class="amount-text ${isIncome ? 'income-text' : 'expense-text'}">
+            ${isIncome ? '+' : '-'}${amount.toLocaleString()}円
+          </div>
+        `;
+        historyItems.unshift(li); // 新しい順にリストの先頭に追加
+      });
+
+      // 表示更新
+      historyItems.forEach(item => listElement.appendChild(item));
+      balanceElement.innerText = `¥${runningTotal.toLocaleString()}`;
+      
+      updateLineChart(chartLabels, chartData);
+    });
+
+    // 線グラフの描画
+    function updateLineChart(labels, data) {
+      const ctx = document.getElementById('lineChart').getContext('2d');
+      if (lineChartInstance) lineChartInstance.destroy();
+
+      lineChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '総資産残高',
+            data: data,
+            borderColor: '#4a90e2',
+            backgroundColor: 'rgba(74, 144, 226, 0.1)',
+            fill: true,
+            tension: 0.3, // 線を滑らかにする
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: false,
+              ticks: { callback: (value) => '¥' + value.toLocaleString() }
+            }
+          }
+        }
+      });
+    }
+
+    // 追加ボタン処理（前回と同じ）
+    document.getElementById("addButton").addEventListener("click", async () => {
+      const type = document.getElementById("typeInput").value;
+      const rawDate = document.getElementById("dateInput").value;
+      const store = document.getElementById("storeInput").value;
+      const amount = document.getElementById("amountInput").value;
+      if (!rawDate || !store || !amount) return alert("入力してください");
+      
+      try {
+        await addDoc(collection(db, "expenses"), {
+          type, store, amount: Number(amount), date: rawDate.replace(/-/g, '/'),
+          source: "手動", createdAt: new Date().toISOString()
+        });
+        document.getElementById("storeInput").value = "";
+        document.getElementById("amountInput").value = "";
+      } catch (e) { alert("エラーが発生しました"); }
+    });
+  </script>
+</body>
+</html>
