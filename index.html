@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>リアルタイム家計簿 - 資産推移版</title>
+  <title>リアルタイム家計簿 - 認証版</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    /* （前回と同じスタイル設定） */
     body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; background: #f0f2f5; color: #333; }
     .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
     .balance-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; }
@@ -22,43 +23,73 @@
     .amount-text { font-weight: bold; font-size: 18px; }
     .income-text { color: #2b8a3e; }
     .expense-text { color: #c92a2a; }
+    
+    /* 追加：ログイン画面用のスタイル */
+    #loginScreen { text-align: center; margin-top: 100px; }
+    .google-btn { background: #fff; color: #757575; border: 1px solid #ccc; max-width: 300px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .google-btn:hover { background: #f8f8f8; }
+    #appScreen { display: none; /* 初期状態では隠しておく */ }
+    #logoutBtn { background: #ff6b6b; margin-top: 10px; max-width: 150px; font-size: 14px; padding: 8px; }
+    #logoutBtn:hover { background: #fa5252; }
   </style>
 </head>
 <body>
 
-  <div class="card balance-card">
-    <div>現在の総資産（残高）</div>
-    <div id="totalBalance">¥0</div>
+  <!-- ログイン画面 -->
+  <div id="loginScreen">
+    <h1>💸 リアルタイム家計簿</h1>
+    <p>あなた専用の家計簿です。ログインしてください。</p>
+    <button id="loginBtn" class="google-btn">
+      <!-- GoogleのGマークアイコン -->
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path></svg>
+      Googleでログイン
+    </button>
   </div>
 
-  <div class="card">
-    <h3>📈 生涯資産の推移</h3>
-    <canvas id="lineChart" height="120"></canvas>
-  </div>
+  <!-- アプリ本体（ログイン後に表示） -->
+  <div id="appScreen">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>💸 リアルタイム家計簿</h1>
+      <button id="logoutBtn">ログアウト</button>
+    </div>
 
-  <div class="grid">
-    <div class="card">
-      <h3>手動入力</h3>
-      <select id="typeInput">
-        <option value="expense">支出 (-)</option>
-        <option value="income">収入 (+)</option>
-      </select>
-      <input type="date" id="dateInput">
-      <input type="text" id="storeInput" placeholder="項目（給与、ランチなど）">
-      <input type="number" id="amountInput" placeholder="金額（円）">
-      <button id="addButton">データを追加</button>
+    <div class="card balance-card">
+      <div>現在の総資産（残高）</div>
+      <div id="totalBalance">¥0</div>
     </div>
 
     <div class="card">
-      <h3>最近の履歴</h3>
-      <ul id="expenseList">
-        <li>読み込み中...</li>
-      </ul>
+      <h3>📈 生涯資産の推移</h3>
+      <canvas id="lineChart" height="120"></canvas>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>手動入力</h3>
+        <select id="typeInput">
+          <option value="expense">支出 (-)</option>
+          <option value="income">収入 (+)</option>
+        </select>
+        <input type="date" id="dateInput">
+        <input type="text" id="storeInput" placeholder="項目（給与、ランチなど）">
+        <input type="number" id="amountInput" placeholder="金額（円）">
+        <button id="addButton">データを追加</button>
+      </div>
+
+      <div class="card">
+        <h3>最近の履歴</h3>
+        <ul id="expenseList">
+          <li>読み込み中...</li>
+        </ul>
+      </div>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    // 認証用のモジュール（Auth）を追加で読み込みます
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } 
+      from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } 
       from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
@@ -74,61 +105,93 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app); // 認証機能を初期化
+    const provider = new GoogleAuthProvider(); // Googleログイン用の設定
+
     let lineChartInstance = null;
+    let unsubscribeSnapshot = null; // ログアウト時にデータの監視を止める用
 
-    // データのリアルタイム取得
-    // ※資産推移を正しく計算するため、日付の「昇順（古い順）」で取得します
-    const q = query(collection(db, "expenses"), orderBy("date", "asc"));
-
-    onSnapshot(q, (snapshot) => {
-      const listElement = document.getElementById("expenseList");
-      const balanceElement = document.getElementById("totalBalance");
-      listElement.innerHTML = "";
-      
-      let runningTotal = 0; // 累積和
-      let chartLabels = [];
-      let chartData = [];
-      let historyItems = []; // 表示用（新しい順にしたいので別途保存）
-
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const amount = Number(data.amount);
-        const isIncome = data.type === 'income';
-
-        // 累積和を計算
-        if (isIncome) {
-          runningTotal += amount;
-        } else {
-          runningTotal -= amount;
-        }
-
-        // グラフ用データの準備（日付ごとに累積値を保存）
-        chartLabels.push(data.date.substring(5, 10)); // "05/12"形式
-        chartData.push(runningTotal);
-
-        // 履歴用アイテムの作成
-        const li = document.createElement("li");
-        li.className = isIncome ? 'income-item' : 'expense-item';
-        li.innerHTML = `
-          <div>
-            <small style="color:#888">${data.date}</small><br>
-            <strong>${data.store}</strong>
-          </div>
-          <div class="amount-text ${isIncome ? 'income-text' : 'expense-text'}">
-            ${isIncome ? '+' : '-'}${amount.toLocaleString()}円
-          </div>
-        `;
-        historyItems.unshift(li); // 新しい順にリストの先頭に追加
-      });
-
-      // 表示更新
-      historyItems.forEach(item => listElement.appendChild(item));
-      balanceElement.innerText = `¥${runningTotal.toLocaleString()}`;
-      
-      updateLineChart(chartLabels, chartData);
+    // ▼▼▼ 認証状態の監視 ▼▼▼
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // ログイン成功時：アプリ画面を表示
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("appScreen").style.display = "block";
+        
+        // データ取得を開始
+        startFetchingData();
+      } else {
+        // 未ログイン・ログアウト時：ログイン画面を表示
+        document.getElementById("loginScreen").style.display = "block";
+        document.getElementById("appScreen").style.display = "none";
+        
+        // データの監視を停止
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+      }
     });
 
-    // 線グラフの描画
+    // ログインボタンの処理
+    document.getElementById("loginBtn").addEventListener("click", () => {
+      signInWithPopup(auth, provider).catch(error => {
+        console.error("ログインエラー:", error);
+        alert("ログインに失敗しました。");
+      });
+    });
+
+    // ログアウトボタンの処理
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      signOut(auth).then(() => {
+        alert("ログアウトしました");
+      });
+    });
+
+
+    // ▼▼▼ データベース処理（前回と同じですが、関数にまとめました） ▼▼▼
+    function startFetchingData() {
+      const q = query(collection(db, "expenses"), orderBy("date", "asc"));
+
+      unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
+        const listElement = document.getElementById("expenseList");
+        const balanceElement = document.getElementById("totalBalance");
+        listElement.innerHTML = "";
+        
+        let runningTotal = 0;
+        let chartLabels = [];
+        let chartData = [];
+        let historyItems = [];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const amount = Number(data.amount);
+          const isIncome = data.type === 'income';
+
+          if (isIncome) runningTotal += amount;
+          else runningTotal -= amount;
+
+          chartLabels.push(data.date.substring(5, 10));
+          chartData.push(runningTotal);
+
+          const li = document.createElement("li");
+          li.className = isIncome ? 'income-item' : 'expense-item';
+          li.innerHTML = `
+            <div>
+              <small style="color:#888">${data.date}</small><br>
+              <strong>${data.store}</strong>
+            </div>
+            <div class="amount-text ${isIncome ? 'income-text' : 'expense-text'}">
+              ${isIncome ? '+' : '-'}${amount.toLocaleString()}円
+            </div>
+          `;
+          historyItems.unshift(li);
+        });
+
+        historyItems.forEach(item => listElement.appendChild(item));
+        balanceElement.innerText = `¥${runningTotal.toLocaleString()}`;
+        
+        updateLineChart(chartLabels, chartData);
+      });
+    }
+
     function updateLineChart(labels, data) {
       const ctx = document.getElementById('lineChart').getContext('2d');
       if (lineChartInstance) lineChartInstance.destroy();
@@ -143,7 +206,7 @@
             borderColor: '#4a90e2',
             backgroundColor: 'rgba(74, 144, 226, 0.1)',
             fill: true,
-            tension: 0.3, // 線を滑らかにする
+            tension: 0.3,
             pointRadius: 2
           }]
         },
@@ -151,16 +214,12 @@
           responsive: true,
           plugins: { legend: { display: false } },
           scales: {
-            y: {
-              beginAtZero: false,
-              ticks: { callback: (value) => '¥' + value.toLocaleString() }
-            }
+            y: { ticks: { callback: (value) => '¥' + value.toLocaleString() } }
           }
         }
       });
     }
 
-    // 追加ボタン処理（前回と同じ）
     document.getElementById("addButton").addEventListener("click", async () => {
       const type = document.getElementById("typeInput").value;
       const rawDate = document.getElementById("dateInput").value;
@@ -175,7 +234,10 @@
         });
         document.getElementById("storeInput").value = "";
         document.getElementById("amountInput").value = "";
-      } catch (e) { alert("エラーが発生しました"); }
+      } catch (e) { 
+        console.error("エラー:", e);
+        alert("追加に失敗しました。ログイン状態を確認してください。"); 
+      }
     });
   </script>
 </body>
